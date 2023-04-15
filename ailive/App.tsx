@@ -1,55 +1,69 @@
-import { BarCodeEvent, BarCodeScanner } from "expo-barcode-scanner";
-import { Camera, CameraType } from "expo-camera";
-import React, { useRef, useState } from "react";
-import { Button, StyleSheet, Text, View } from "react-native";
+import * as Speech from "expo-speech";
+import { NativeBaseProvider } from "native-base";
+import React, { useEffect, useState } from "react";
+import { StyleSheet, View } from "react-native";
+import Admin from "./Admin";
+import RecordScreen from "./RecordScreen";
+import Scanner from "./Scanner";
+import { Settings, getSettings } from "./storage";
+
 export default function App() {
-  const [type, setType] = useState(CameraType.back);
-  const [permission, requestPermission] = Camera.useCameraPermissions();
-  const ref = useRef<Camera>();
+  const [barcodeData, setBarcodeData] = useState<string>();
+  const [voices, setVoices] = useState<Speech.Voice[]>([]);
+  const [settings, setSettings] = useState<Settings>();
 
-  if (!permission) {
-    // Camera permissions are still loading
-    return <View />;
-  }
+  useEffect(() => {
+    console.warn("get settings");
+    (async () => {
+      setSettings(await getSettings());
+    })();
+  }, [barcodeData]);
 
-  if (!permission.granted) {
-    // Camera permissions are not granted yet
-    return (
-      <View style={styles.container}>
-        <Text style={{ textAlign: "center" }}>
-          We need your permission to show the camera
-        </Text>
-        <Button onPress={requestPermission} title="grant permission" />
-      </View>
-    );
-  }
+  const existingToy = settings?.toys.find((t) => t.qr_code === barcodeData);
+  useEffect(() => {
+    (async () => {
+      const voices = await Speech.getAvailableVoicesAsync();
+      setVoices(voices.filter((v) => v.language === "en-US"));
+    })();
+  }, []);
 
-  function capture() {
-    ref.current?.takePictureAsync();
-    // setType((current) =>
-    //   current === CameraType.back ? CameraType.front : CameraType.back
-    // );
-  }
+  const speak = () => {
+    const thingToSay = "Hello! I'm a dinosaur";
 
-  const _handleBarCodeScanned = (params: BarCodeEvent) => {};
+    // get random voice
+    const randomVoice = voices[Math.floor(Math.random() * voices.length)];
+
+    Speech.speak(thingToSay, {
+      voice: randomVoice.identifier,
+    });
+  };
 
   return (
-    <View style={styles.container}>
-      <BarCodeScanner
-        onBarCodeScanned={_handleBarCodeScanned}
-        style={{
-          height: "50%",
-          width: "50%",
-        }}
-      />
-      {/* <Camera ref={ref} style={styles.camera} type={type}>
+    <NativeBaseProvider>
+      <View style={styles.container}>
+        {/* <Admin /> */}
+        {/* <Button onPress={() => speak()} title="Set barcode" /> */}
+        {barcodeData && !existingToy && (
+          <Admin
+            onToyCreated={() => {
+              setBarcodeData(undefined);
+            }}
+            barcodeData={barcodeData}
+          />
+        )}
+        {barcodeData && existingToy && <RecordScreen />}
+        {/* {barcodeData && <RecordScreen />} */}
+        {!barcodeData && <Scanner onBarCode={setBarcodeData} />}
+
+        {/* <Camera ref={ref} style={styles.camera} type={type}>
         <View style={styles.buttonContainer}>
           <TouchableOpacity style={styles.button} onPress={capture}>
             <Text style={styles.text}>Capture my drawing!</Text>
           </TouchableOpacity>
         </View>
       </Camera> */}
-    </View>
+      </View>
+    </NativeBaseProvider>
   );
 }
 
